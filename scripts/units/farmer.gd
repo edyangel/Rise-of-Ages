@@ -77,14 +77,13 @@ func _physics_process(_delta: float) -> void:
 			var tile: Vector2 = _intent.get("tile", Vector2.ZERO)
 			var slot: int = int(_intent.get("slot", -1))
 			var queue: Array = _intent.get("queue", [])
-			if map and ResourceLoader.exists("res://scripts/units/states/farmer_states.gd"):
-				var FS = load("res://scripts/units/states/farmer_states.gd")
-				if FS and FS.has_method("perform_lumberjack"):
-					var started = FS.perform_lumberjack(self, map, tile, slot, queue)
+			if map and ResourceLoader.exists("res://scripts/units/states/actions.gd"):
+				var Acts = load("res://scripts/units/states/actions.gd")
+				if Acts and Acts.has_method("perform_lumberjack"):
+					var started = Acts.perform_lumberjack(self, map, tile, slot, queue)
 					if started:
 						_intent.clear()
 					else:
-						# couldn't start; keep intent but throttle to avoid spamming
 						_intent["_retry_in"] = 0.15
 			else:
 				_intent.clear()

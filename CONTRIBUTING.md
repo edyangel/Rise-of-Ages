@@ -61,6 +61,38 @@ git config --global user.email "tu-email@example.com"
 > - Descarga el ejecutable portátil de Godot 4.4.1 para Windows y colócalo en la raíz del repo con el nombre `Godot_v4.4.1-stable_win64.exe` (o actualiza el comando con el nombre real del archivo) y ejecútalo como arriba.
 > - Alternativa: abre el lanzador de Godot, haz "Import/Scan" y selecciona el archivo `project.godot` de este repo.
 
+> ¿Ves una versión vieja del juego tras clonar/actualizar?
+>
+> Causas típicas: estás en otra carpeta/fork, rama distinta a `main`, tu repo local no está actualizado o Godot está usando caché viejo.
+> Pasos rápidos (ejecútalos en la carpeta que contiene `project.godot`):
+> 1) Verifica el remoto y la carpeta
+>   ```powershell
+>   git remote -v
+>   git rev-parse --show-toplevel
+>   ```
+>   Asegúrate que `origin` apunta a `https://github.com/edyangel/Rise-of-Ages.git` y que estás en la carpeta correcta.
+> 2) Trae y cambia a main
+>   ```powershell
+>   git fetch --all --prune
+>   git switch main
+>   git pull
+>   git log --oneline -n 3
+>   ```
+> 3) Si hay cambios locales que bloquean el pull
+>   - O guarda temporalmente: `git stash -u`
+>   - O fuerza alineación (destructivo):
+>     ```powershell
+>     git reset --hard origin/main
+>     ```
+> 4) Forzar reimport en Godot (por caché)
+>   - Cierra Godot.
+>   - Borra las carpetas `.godot/` y `.import/` (si existen).
+>   - Vuelve a abrir el proyecto.
+> 5) Asegura versión de Godot
+>   - Usa Godot 4.4.1 (Standard). O abre el proyecto con `godot --editor --path .`.
+> 6) Último recurso
+>   - Si clonaste un ZIP viejo o un fork: borra la carpeta y clona de nuevo el repo oficial.
+
 ## Ciclo de trabajo diario
 1. Traer lo último de main
    ```powershell

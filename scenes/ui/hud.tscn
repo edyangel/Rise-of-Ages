@@ -1,123 +1,113 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene load_steps=4 format=3 uid="uid://q3185dvqg7li"]
 
-[ext_resource type="Script" path="res://scripts/ui/hud.gd" id=1]
-[ext_resource type="Texture2D" path="res://UI/Sprites/UI_Flat_BarFill01g.png" id=2]
+[ext_resource type="Script" uid="uid://cykfv50yh1ylv" path="res://scripts/ui/hud.gd" id="1"]
+[ext_resource type="Texture2D" uid="uid://d4lbodawnms7n" path="res://UI/Sprites/UI_Flat_BarFill01g.png" id="2"]
 
-[sub_resource type="StyleBoxFlat" id=1]
-bg_color = Color(0.12, 0.12, 0.12, 1)
-border_width_left = 0
-border_width_top = 0
-border_width_right = 0
-border_width_bottom = 0
+[sub_resource type="StyleBoxFlat" id="1"]
 content_margin_left = 8.0
 content_margin_top = 6.0
 content_margin_right = 8.0
 content_margin_bottom = 6.0
+bg_color = Color(0.12, 0.12, 0.12, 1)
 
 [node name="HUD" type="Panel"]
-script = ExtResource( 1 )
-anchors_preset = 0
+anchors_preset = -1
 anchor_left = 0.25
-anchor_top = 0.0
 anchor_right = 0.75
-anchor_bottom = 0.0
-offset_left = 0.0
-offset_top = 0.0
-offset_right = 0.0
 offset_bottom = 40.0
 grow_horizontal = 2
 grow_vertical = 0
-theme_override_styles/panel = SubResource( 1 )
+theme_override_styles/panel = SubResource("1")
+script = ExtResource("1")
 
 [node name="Backdrop" type="TextureRect" parent="."]
-anchors_preset = 15
-anchor_left = 0.0
-anchor_top = 0.0
+layout_mode = 0
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = 0.0
-offset_top = 0.0
-offset_right = 0.0
-offset_bottom = 0.0
 size_flags_horizontal = 3
-size_flags_vertical = 1
-texture = ExtResource( 2 )
+texture = ExtResource("2")
 stretch_mode = 2
 
 [node name="Center" type="CenterContainer" parent="."]
-anchors_preset = 10
-anchor_left = 0.0
-anchor_top = 0.0
+layout_mode = 1
+anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = 0.0
-offset_top = 0.0
-offset_right = 0.0
-offset_bottom = 0.0
+grow_horizontal = 2
+grow_vertical = 2
 
 [node name="Resources" type="HBoxContainer" parent="Center"]
 custom_minimum_size = Vector2(0, 32)
+layout_mode = 2
 theme_override_constants/separation = 8
 
-; Wood
-[node name="WoodIcon" type="TextureRect" parent="Resources"]
+[node name="Resources#WoodIcon" type="TextureRect" parent="."]
 custom_minimum_size = Vector2(24, 24)
+layout_mode = 0
+scale = Vector2(0.929252, 1.27208)
 tooltip_text = "Madera"
 
-[node name="WoodValue" type="Label" parent="Resources"]
-text = "0"
+[node name="Resources#WoodValue" type="Label" parent="."]
 custom_minimum_size = Vector2(28, 24)
+layout_mode = 0
+text = "0"
 
-; Gold
-[node name="GoldIcon" type="TextureRect" parent="Resources"]
+[node name="Resources#GoldIcon" type="TextureRect" parent="."]
 custom_minimum_size = Vector2(24, 24)
+layout_mode = 0
 tooltip_text = "Oro"
 
-[node name="GoldValue" type="Label" parent="Resources"]
-text = "0"
+[node name="Resources#GoldValue" type="Label" parent="."]
 custom_minimum_size = Vector2(28, 24)
+layout_mode = 0
+text = "0"
 
-; Iron
-[node name="IronIcon" type="TextureRect" parent="Resources"]
+[node name="Resources#IronIcon" type="TextureRect" parent="."]
 custom_minimum_size = Vector2(24, 24)
+layout_mode = 0
 tooltip_text = "Hierro"
 
-[node name="IronValue" type="Label" parent="Resources"]
-text = "0"
+[node name="Resources#IronValue" type="Label" parent="."]
 custom_minimum_size = Vector2(28, 24)
+layout_mode = 0
+text = "0"
 
-; Copper
-[node name="CopperIcon" type="TextureRect" parent="Resources"]
+[node name="Resources#CopperIcon" type="TextureRect" parent="."]
 custom_minimum_size = Vector2(24, 24)
+layout_mode = 0
 tooltip_text = "Cobre"
 
-[node name="CopperValue" type="Label" parent="Resources"]
-text = "0"
+[node name="Resources#CopperValue" type="Label" parent="."]
 custom_minimum_size = Vector2(28, 24)
+layout_mode = 0
+text = "0"
 
-; Stone
-[node name="StoneIcon" type="TextureRect" parent="Resources"]
+[node name="Resources#StoneIcon" type="TextureRect" parent="."]
 custom_minimum_size = Vector2(24, 24)
+layout_mode = 0
 tooltip_text = "Piedra"
 
-[node name="StoneValue" type="Label" parent="Resources"]
-text = "0"
+[node name="Resources#StoneValue" type="Label" parent="."]
 custom_minimum_size = Vector2(28, 24)
+layout_mode = 0
+text = "0"
 
-; Water
-[node name="WaterIcon" type="TextureRect" parent="Resources"]
+[node name="Resources#WaterIcon" type="TextureRect" parent="."]
 custom_minimum_size = Vector2(24, 24)
+layout_mode = 0
 tooltip_text = "Agua"
 
-[node name="WaterValue" type="Label" parent="Resources"]
-text = "0"
+[node name="Resources#WaterValue" type="Label" parent="."]
 custom_minimum_size = Vector2(28, 24)
+layout_mode = 0
+text = "0"
 
-; Food
-[node name="FoodIcon" type="TextureRect" parent="Resources"]
+[node name="Resources#FoodIcon" type="TextureRect" parent="."]
 custom_minimum_size = Vector2(24, 24)
+layout_mode = 0
 tooltip_text = "Comida"
 
-[node name="FoodValue" type="Label" parent="Resources"]
-text = "0"
+[node name="Resources#FoodValue" type="Label" parent="."]
 custom_minimum_size = Vector2(28, 24)
+layout_mode = 0
+text = "0"
