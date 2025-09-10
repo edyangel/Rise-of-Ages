@@ -24,6 +24,7 @@ var tile_blockers := {} # tile_key -> StaticBody2D to block movement when dense
 
 # random world decorations (tile coords)
 var trees: Array = []
+var trees_by_slot := {} # key "x,y:slot" -> tree entry dictionary (live trees only)
 var golds: Array = []
 var rocks: Array = []
 var tumbleweeds: Array = []
@@ -722,36 +723,36 @@ func _handle_right_click(world_pos: Vector2) -> void:
 	else:
 		return
 
-	# Prefer trees in the clicked tile only to avoid scanning the whole list
+	# Prefer trees in the clicked tile only; avoid scanning the whole trees array here
 	var dest_tile = Vector2(floor(world_pos.x / TILE_SIZE), floor(world_pos.y / TILE_SIZE))
-	var nearest = null
+	var nearest: Dictionary = {}
 	var nd = 1e9
 	var tk = _get_tile_key(dest_tile)
+	var live_count := 0
 	if resource_slots.has(tk):
 		for si in range(5):
 			if resource_slots[tk][si] != "TREE":
 				continue
-			# Find a live tree entry matching tile+slot
-			for t in trees:
-				if int(t.get("type", 0)) <= 0:
-					continue
-				if t["tile"] != dest_tile or int(t.get("slot", -1)) != si:
-					continue
-				var tp = _world_pos_for_slot(dest_tile, si)
-				var d = tp.distance_to(world_pos)
-				if d < nd:
-					nd = d
-					nearest = t
-				break
+			live_count += 1
+			var tp = _world_pos_for_slot(dest_tile, si)
+			var d = tp.distance_to(world_pos)
+			if d < nd:
+				nd = d
+				nearest = {"tile": dest_tile, "slot": si}
 
-	# If clicking right on a tree inside the clicked tile and very close, assign chopping; otherwise prefer move
-	var chop_radius := TILE_SIZE * 0.35
-	if nearest and nd < chop_radius:
+	# If clicking right on a tree inside the clicked tile and close, assign chopping; otherwise prefer move
+	# Make this a bit more forgiving and also allow when the tile has exactly one live tree.
+	var chop_radius := TILE_SIZE * 0.6
+	var has_target := nearest.has("tile") and nearest.has("slot")
+	var want_chop := has_target and (nd < chop_radius or live_count == 1)
+	if want_chop:
 		var tilev: Vector2 = nearest["tile"]
 		var first_slot: int = int(nearest["slot"])
 		var assigned_any := 0
-		# Build smart queue: trees within 5 tiles from the clicked tree
-		var queue_list := _find_neighbor_trees(tilev, 5)
+		# Build smart queue only when multi-select; use a smaller radius to keep it snappy.
+		var queue_list: Array = []
+		if sel.size() > 1:
+			queue_list = _find_neighbor_trees(tilev, 4)
 		for u in sel:
 			var assigned := false
 			var used_tile := tilev
@@ -804,26 +805,52 @@ func _handle_right_click(world_pos: Vector2) -> void:
 		print("Tile %s is full; no units moved" % str(dest_tile))
 
 func _find_neighbor_trees(center_tile: Vector2, radius_tiles: int) -> Array:
-	var res: Array = []
-	for t in trees:
-		if int(t.get("type", 0)) == 0:
-			continue
-		var tt: Vector2 = t["tile"]
-		var dx = abs(int(tt.x) - int(center_tile.x))
-		var dy = abs(int(tt.y) - int(center_tile.y))
-		var cheb = max(dx, dy)
-		if cheb <= radius_tiles:
-			res.append({"tile": tt, "slot": int(t["slot"])})
-	# sort by distance from center for consistent ordering
-	res.sort_custom(func(a, b):
-		var da = (a.tile - center_tile).length()
-		var db = (b.tile - center_tile).length()
-		return da < db
-	)
-	# drop the very first if it's exactly the center tree
-	if res.size() > 0 and res[0].tile == center_tile:
-		res.remove_at(0)
-	return res
+	# Fast neighbor scan: iterate tiles in Chebyshev rings around center and read resource_slots
+	var result: Array = []
+	# Ensure slot map exists for tiles we touch lazily
+	for dist in range(0, radius_tiles + 1):
+		if dist == 0:
+			var k0 = _get_tile_key(center_tile)
+			if resource_slots.has(k0):
+				for si in range(5):
+					if resource_slots[k0][si] == "TREE":
+						result.append({"tile": center_tile, "slot": si})
+		else:
+			var cx = int(center_tile.x)
+			var cy = int(center_tile.y)
+			var d = dist
+			# Top and bottom rows of the ring
+			for x in range(cx - d, cx + d + 1):
+				var t_top = Vector2(x, cy - d)
+				var k_top = _get_tile_key(t_top)
+				if resource_slots.has(k_top):
+					for si in range(5):
+						if resource_slots[k_top][si] == "TREE":
+							result.append({"tile": t_top, "slot": si})
+				var t_bot = Vector2(x, cy + d)
+				var k_bot = _get_tile_key(t_bot)
+				if resource_slots.has(k_bot):
+					for si2 in range(5):
+						if resource_slots[k_bot][si2] == "TREE":
+							result.append({"tile": t_bot, "slot": si2})
+			# Left and right columns (excluding corners already added)
+			for y in range(cy - d + 1, cy + d):
+				var t_left = Vector2(cx - d, y)
+				var k_left = _get_tile_key(t_left)
+				if resource_slots.has(k_left):
+					for sj in range(5):
+						if resource_slots[k_left][sj] == "TREE":
+							result.append({"tile": t_left, "slot": sj})
+				var t_right = Vector2(cx + d, y)
+				var k_right = _get_tile_key(t_right)
+				if resource_slots.has(k_right):
+					for sk in range(5):
+						if resource_slots[k_right][sk] == "TREE":
+							result.append({"tile": t_right, "slot": sk})
+	# The first item(s) may be the center tile; drop the first if it's exactly the center (primary is already chosen)
+	if result.size() > 0 and result[0].tile == center_tile:
+		result.remove_at(0)
+	return result
 
 func _attempt_next_chop(unit) -> void:
 	# 1) Try queued targets if exist
@@ -859,38 +886,140 @@ func _attempt_next_chop(unit) -> void:
 	_park_unit(unit)
 
 func _find_nearest_live_tree(from_pos: Vector2) -> Dictionary:
+	# Fast ring scan around the unit's tile using resource_slots
+	var utile = Vector2(floor(from_pos.x / TILE_SIZE), floor(from_pos.y / TILE_SIZE))
 	var best: Dictionary = {}
 	var best_d := 1e9
-	for t in trees:
-		if int(t.get("type", 0)) <= 0:
-			continue
-		var tilev: Vector2 = t["tile"]
-		var slot: int = int(t["slot"])
-		var pos = _world_pos_for_slot(tilev, slot)
-		var d = from_pos.distance_to(pos)
-		if d < best_d:
-			best_d = d
-			best = {"tile": tilev, "slot": slot}
+	var max_radius := 12 # hard cap to avoid long scans on empty maps
+	for dist in range(0, max_radius + 1):
+		if dist == 0:
+			var k0 = _get_tile_key(utile)
+			if resource_slots.has(k0):
+				for si in range(5):
+					if resource_slots[k0][si] == "TREE":
+						var pos0 = _world_pos_for_slot(utile, si)
+						var d0 = from_pos.distance_to(pos0)
+						if d0 < best_d:
+							best_d = d0
+							best = {"tile": utile, "slot": si}
+			if best.size() > 0:
+				return best
+		else:
+			var cx = int(utile.x)
+			var cy = int(utile.y)
+			var d = dist
+			# Top and bottom rows of the ring
+			for x in range(cx - d, cx + d + 1):
+				var t_top = Vector2(x, cy - d)
+				var k_top = _get_tile_key(t_top)
+				if resource_slots.has(k_top):
+					for si in range(5):
+						if resource_slots[k_top][si] == "TREE":
+							var p = _world_pos_for_slot(t_top, si)
+							var dd = from_pos.distance_to(p)
+							if dd < best_d:
+								best_d = dd
+								best = {"tile": t_top, "slot": si}
+				var t_bot = Vector2(x, cy + d)
+				var k_bot = _get_tile_key(t_bot)
+				if resource_slots.has(k_bot):
+					for sj in range(5):
+						if resource_slots[k_bot][sj] == "TREE":
+							var p2 = _world_pos_for_slot(t_bot, sj)
+							var dd2 = from_pos.distance_to(p2)
+							if dd2 < best_d:
+								best_d = dd2
+								best = {"tile": t_bot, "slot": sj}
+			# Left and right columns (excluding corners already added)
+			for y in range(cy - d + 1, cy + d):
+				var t_left = Vector2(cx - d, y)
+				var k_left = _get_tile_key(t_left)
+				if resource_slots.has(k_left):
+					for sk in range(5):
+						if resource_slots[k_left][sk] == "TREE":
+							var p3 = _world_pos_for_slot(t_left, sk)
+							var dd3 = from_pos.distance_to(p3)
+							if dd3 < best_d:
+								best_d = dd3
+								best = {"tile": t_left, "slot": sk}
+				var t_right = Vector2(cx + d, y)
+				var k_right = _get_tile_key(t_right)
+				if resource_slots.has(k_right):
+					for sl in range(5):
+						if resource_slots[k_right][sl] == "TREE":
+							var p4 = _world_pos_for_slot(t_right, sl)
+							var dd4 = from_pos.distance_to(p4)
+							if dd4 < best_d:
+								best_d = dd4
+								best = {"tile": t_right, "slot": sl}
+		if best.size() > 0:
+			return best
 	return best
 
 func _find_nearby_live_tree(center_tile: Vector2, radius_tiles: int) -> Dictionary:
+	# Scan tiles in a Chebyshev radius using resource_slots only
 	var best: Dictionary = {}
 	var best_d := 1e9
-	for t in trees:
-		if int(t.get("type", 0)) <= 0:
-			continue
-		var tt: Vector2 = t["tile"]
-		var dx = abs(int(tt.x) - int(center_tile.x))
-		var dy = abs(int(tt.y) - int(center_tile.y))
-		var cheb = max(dx, dy)
-		if cheb > radius_tiles:
-			continue
-		var slot: int = int(t["slot"])
-		var pos = _world_pos_for_slot(tt, slot)
-		var d = pos.distance_to(center_tile * TILE_SIZE + Vector2(TILE_SIZE/2.0, TILE_SIZE/2.0))
-		if d < best_d:
-			best_d = d
-			best = {"tile": tt, "slot": slot}
+	var origin = center_tile * TILE_SIZE + Vector2(TILE_SIZE/2.0, TILE_SIZE/2.0)
+	var cx = int(center_tile.x)
+	var cy = int(center_tile.y)
+	for dist in range(0, radius_tiles + 1):
+		if dist == 0:
+			var k0 = _get_tile_key(center_tile)
+			if resource_slots.has(k0):
+				for si in range(5):
+					if resource_slots[k0][si] == "TREE":
+						var p0 = _world_pos_for_slot(center_tile, si)
+						var d0 = p0.distance_to(origin)
+						if d0 < best_d:
+							best_d = d0
+							best = {"tile": center_tile, "slot": si}
+		else:
+			var d = dist
+			for x in range(cx - d, cx + d + 1):
+				var t_top = Vector2(x, cy - d)
+				var kt = _get_tile_key(t_top)
+				if resource_slots.has(kt):
+					for si in range(5):
+						if resource_slots[kt][si] == "TREE":
+							var p1 = _world_pos_for_slot(t_top, si)
+							var dd = p1.distance_to(origin)
+							if dd < best_d:
+								best_d = dd
+								best = {"tile": t_top, "slot": si}
+				var t_bot = Vector2(x, cy + d)
+				var kb = _get_tile_key(t_bot)
+				if resource_slots.has(kb):
+					for sj in range(5):
+						if resource_slots[kb][sj] == "TREE":
+							var p2 = _world_pos_for_slot(t_bot, sj)
+							var dd2 = p2.distance_to(origin)
+							if dd2 < best_d:
+								best_d = dd2
+								best = {"tile": t_bot, "slot": sj}
+			for y in range(cy - d + 1, cy + d):
+				var t_left = Vector2(cx - d, y)
+				var kl = _get_tile_key(t_left)
+				if resource_slots.has(kl):
+					for sk in range(5):
+						if resource_slots[kl][sk] == "TREE":
+							var p3 = _world_pos_for_slot(t_left, sk)
+							var dd3 = p3.distance_to(origin)
+							if dd3 < best_d:
+								best_d = dd3
+								best = {"tile": t_left, "slot": sk}
+				var t_right = Vector2(cx + d, y)
+				var kr = _get_tile_key(t_right)
+				if resource_slots.has(kr):
+					for sl in range(5):
+						if resource_slots[kr][sl] == "TREE":
+							var p4 = _world_pos_for_slot(t_right, sl)
+							var dd4 = p4.distance_to(origin)
+							if dd4 < best_d:
+								best_d = dd4
+								best = {"tile": t_right, "slot": sl}
+		if best.size() > 0:
+			return best
 	return best
 
 func _park_unit(unit) -> void:
@@ -1059,6 +1188,30 @@ func _spawn_demo_soldados():
 func _get_tile_key(tile: Vector2) -> String:
 	return "%d,%d" % [int(tile.x), int(tile.y)]
 
+func _tree_slot_key(tile: Vector2, slot: int) -> String:
+	return "%d,%d:%d" % [int(tile.x), int(tile.y), int(slot)]
+
+func _index_tree_entry(tile: Vector2, slot: int, entry: Dictionary) -> void:
+	# Only index if appears live (type > 0)
+	if int(entry.get("type", 0)) > 0:
+		trees_by_slot[_tree_slot_key(tile, slot)] = entry
+
+func _erase_tree_index(tile: Vector2, slot: int) -> void:
+	var k = _tree_slot_key(tile, slot)
+	if trees_by_slot.has(k):
+		trees_by_slot.erase(k)
+
+func _get_tree_entry(tile: Vector2, slot: int) -> Dictionary:
+	var k = _tree_slot_key(tile, slot)
+	if trees_by_slot.has(k):
+		return trees_by_slot[k]
+	# Fallback: scan once and cache (for legacy-spawned trees)
+	for t in trees:
+		if t.get("tile") == tile and int(t.get("slot", -1)) == slot and int(t.get("type", 0)) > 0:
+			trees_by_slot[k] = t
+			return t
+	return {}
+
 func _ensure_tile_slots(tile: Vector2) -> void:
 	var k = _get_tile_key(tile)
 	if not tile_slots.has(k):
@@ -1201,23 +1354,17 @@ func _process(delta: float) -> void:
 					u.start_chopping(task.tile, assigned_slot)
 		# If no active choppers, still keep task but don't tick
 		if active > 0:
-			# refresh tree HP bar visibility while being chopped
+			# refresh tree HP bar visibility while being chopped (fast lookup)
 			var now_ts = Time.get_unix_time_from_system()
-			for i in range(trees.size()):
-				var tt = trees[i]
-				if tt["tile"] == task.tile and int(tt.get("slot", -1)) == int(task.slot) and int(tt.get("type", 0)) > 0:
-					tt["_hp_show_until"] = now_ts + 2.0
-					if _hp_overlay:
-						_hp_overlay.queue_redraw()
-					break
+			var te = _get_tree_entry(task.tile, int(task.slot))
+			if te.size() > 0:
+				te["_hp_show_until"] = now_ts + 2.0
+				if _hp_overlay:
+					_hp_overlay.queue_redraw()
 			if not task.has("hp_remaining"):
-				# Initialize from current tree HP so progress persists across task cancel/restart
-				var cur_hp := 30
-				for i in range(trees.size()):
-					var tt = trees[i]
-					if tt["tile"] == task.tile and int(tt.get("slot", -1)) == int(task.slot) and int(tt.get("type", 0)) > 0:
-						cur_hp = int(tt.get("hp", 30))
-						break
+				# Initialize from current tree HP so progress persists across task cancel/restart (fast)
+				var te2 = _get_tree_entry(task.tile, int(task.slot))
+				var cur_hp := int(te2.get("hp", 30)) if te2.size() > 0 else 30
 				task.hp_remaining = cur_hp
 			if not task.has("tick_accum"):
 				task.tick_accum = 0.0
@@ -1228,11 +1375,9 @@ func _process(delta: float) -> void:
 				var total = active * ticks
 				# Cap damage by current tree HP to avoid desync
 				var cap_hp := int(task.hp_remaining)
-				for i in range(trees.size()):
-					var tt = trees[i]
-					if tt["tile"] == task.tile and int(tt.get("slot", -1)) == int(task.slot) and int(tt.get("type", 0)) > 0:
-						cap_hp = min(cap_hp, int(tt.get("hp", 30)))
-						break
+				var te3 = _get_tree_entry(task.tile, int(task.slot))
+				if te3.size() > 0:
+					cap_hp = min(cap_hp, int(te3.get("hp", 30)))
 				var dmg = min(cap_hp, total)
 				if dmg > 0:
 					# award wood now (1 per second por farmer)
@@ -1241,28 +1386,24 @@ func _process(delta: float) -> void:
 						game.add_wood(dmg)
 					# lower HP on task and tree entry (keep them in sync)
 					task.hp_remaining = max(0, int(task.hp_remaining) - dmg)
-					for i in range(trees.size()):
-						var tt = trees[i]
-						if tt["tile"] == task.tile and int(tt.get("slot", -1)) == int(task.slot) and int(tt.get("type", 0)) > 0:
-							if not tt.has("hp_max"):
-								tt["hp_max"] = 30
-							tt["hp"] = max(0, int(tt.get("hp", 30)) - dmg)
-							# also ensure visibility extends at least 2s beyond last damage application
-							tt["_hp_show_until"] = Time.get_unix_time_from_system() + 2.0
-							if _hp_overlay:
-								_hp_overlay.queue_redraw()
-							break
+					var te4 = _get_tree_entry(task.tile, int(task.slot))
+					if te4.size() > 0:
+						if not te4.has("hp_max"):
+							te4["hp_max"] = 30
+						te4["hp"] = max(0, int(te4.get("hp", 30)) - dmg)
+						# also ensure visibility extends at least 2s beyond last damage application
+						te4["_hp_show_until"] = Time.get_unix_time_from_system() + 2.0
+						if _hp_overlay:
+							_hp_overlay.queue_redraw()
 					task.tick_accum -= float(ticks)
 					queue_redraw()
 			# Finish when HP depleted (by task or by tree entry)
 			var hp_now := int(task.hp_remaining)
 			if hp_now > 0:
-				# double-check per-tree HP in case of desync
-				for i in range(trees.size()):
-					var tt2 = trees[i]
-					if tt2["tile"] == task.tile and int(tt2.get("slot", -1)) == int(task.slot) and int(tt2.get("type", 0)) > 0:
-						hp_now = min(hp_now, int(tt2.get("hp", 30)))
-						break
+				# double-check per-tree HP in case of desync (fast)
+				var te5 = _get_tree_entry(task.tile, int(task.slot))
+				if te5.size() > 0:
+					hp_now = min(hp_now, int(te5.get("hp", 30)))
 			if hp_now <= 0:
 				# Only chop if still has assignees (avoid chopping stale targets)
 				if task.units.size() > 0:
@@ -1322,13 +1463,9 @@ func start_chop(tile: Vector2, slot: int, unit) -> bool:
 	# cancel any previous chopping assignments for this unit
 	_cancel_unit_chops(unit)
 	# reserve slot
-	# ensure this tile+slot has a live tree
-	var has_live := false
-	for t in trees:
-		if t["tile"] == tile and int(t.get("slot", -1)) == slot and int(t.get("type", 0)) > 0:
-			has_live = true
-			break
-	if not has_live:
+	# fast check: ensure this tile+slot currently has a live tree via resource map
+	var tk = _get_tile_key(tile)
+	if not resource_slots.has(tk) or resource_slots[tk][slot] != "TREE":
 		if unit and unit.has_method("stop_chopping"):
 			unit.stop_chopping()
 		return false
@@ -1340,13 +1477,9 @@ func start_chop(tile: Vector2, slot: int, unit) -> bool:
 	# build task key
 	var key = _get_tile_key(tile) + ":" + str(slot)
 	if not chop_tasks.has(key):
-		# Initialize hp_remaining from current tree HP to preserve progress
-		var cur_hp := 30
-		for i in range(trees.size()):
-			var et = trees[i]
-			if et["tile"] == tile and int(et.get("slot", -1)) == slot and int(et.get("type", 0)) > 0:
-				cur_hp = int(et.get("hp", 30))
-				break
+		# Initialize hp_remaining from current tree HP to preserve progress (fast)
+		var te0 = _get_tree_entry(tile, slot)
+		var cur_hp := int(te0.get("hp", 30)) if te0.size() > 0 else 30
 		chop_tasks[key] = {"tile": tile, "slot": slot, "units": [], "approach": {}, "assigned_slot": {}, "hp_remaining": cur_hp, "tick_accum": 0.0}
 	var task = chop_tasks[key]
 	if not task.units.has(unit):
@@ -1355,15 +1488,13 @@ func start_chop(tile: Vector2, slot: int, unit) -> bool:
 		var base = _world_pos_for_slot(tile, slot)
 		task.approach[unit] = base
 		task.assigned_slot[unit] = slot
-	# mark tree as recently chopped to show HP bar
-	for i in range(trees.size()):
-		var et = trees[i]
-		if et["tile"] == tile and int(et.get("slot", -1)) == slot and int(et.get("type", 0)) > 0:
-			et["_hp_show_until"] = Time.get_unix_time_from_system() + 2.0
-			queue_redraw()
-			if _hp_overlay:
-				_hp_overlay.queue_redraw()
-			break
+	# mark tree as recently chopped to show HP bar (fast)
+	var et = _get_tree_entry(tile, slot)
+	if et.size() > 0:
+		et["_hp_show_until"] = Time.get_unix_time_from_system() + 2.0
+		queue_redraw()
+		if _hp_overlay:
+			_hp_overlay.queue_redraw()
 	# instruct unit to move to slot
 	var target = _world_pos_for_slot(tile, slot)
 	if unit and unit.has_method("move_to"):
@@ -1464,6 +1595,8 @@ func chop_tree_at(tile: Vector2, slot_idx: int) -> bool:
 	var pk = _get_tile_key(tile)
 	if resource_slots.has(pk):
 		resource_slots[pk][slot_idx] = "TRUNK"
+	# drop from fast index
+	_erase_tree_index(tile, slot_idx)
 	# No tile blockers; per-tree colliders handle passage
 
 	# remove the matched entries explicitly (reverse order to keep indices valid)
@@ -1569,8 +1702,10 @@ func spawn_tree_entry(sheet: String, frame_idx: int, tile: Vector2, slot: int) -
 	add_child(sp)
 	# Initialize per-tree HP so wood yields per second are tracked (30 total)
 	var hpv := 30
-	trees.append({"tile": tile, "slot": slot, "type": frame_idx, "type_name": sheet, "sheet": sheet, "node": sp, "hp_max": hpv, "hp": hpv, "_hp_show_until": -1e9})
+	var entry = {"tile": tile, "slot": slot, "type": frame_idx, "type_name": sheet, "sheet": sheet, "node": sp, "hp_max": hpv, "hp": hpv, "_hp_show_until": -1e9}
+	trees.append(entry)
 	resource_slots[k][slot] = "TREE"
+	_index_tree_entry(tile, slot, entry)
 	# Add a small trunk collider instead of tile-wide blockers
 	var cols2 = TreeConfig.sheet_cols(sheet)
 	var rows2 = TreeConfig.sheet_rows(sheet)
