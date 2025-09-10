@@ -141,6 +141,7 @@ var TreeConfig = preload("res://scripts/tree_data.gd")
 var chop_tasks := {}
 var cut_queues := {} # unit -> Array of {tile:Vector2, slot:int}
 var order_markers: Array = [] # [{pos:Vector2, ttl:float}] transient visuals for issued orders
+var _pending_orders: Array = [] # queue of {type:String, pos:Vector2, units:Array}
 
 func _ready():
 	# randomize decorations
@@ -714,7 +715,7 @@ func _handle_left_click(world_pos: Vector2) -> void:
 	_clear_selection()
 
 func _handle_right_click(world_pos: Vector2) -> void:
-	# Determine the active selection list
+	# Build selection once and enqueue order to process next frame
 	var sel: Array = []
 	if selected_units.size() > 0:
 		sel = selected_units.duplicate()
@@ -722,7 +723,11 @@ func _handle_right_click(world_pos: Vector2) -> void:
 		sel = [selected_unit]
 	else:
 		return
+	_pending_orders.append({"type": "rclick", "pos": world_pos, "units": sel})
+	# Minimal feedback now; rest happens in _process
+	return
 
+func _apply_right_click_order(sel: Array, world_pos: Vector2) -> void:
 	# Prefer trees in the clicked tile only; avoid scanning the whole trees array here
 	var dest_tile = Vector2(floor(world_pos.x / TILE_SIZE), floor(world_pos.y / TILE_SIZE))
 	var nearest: Dictionary = {}
@@ -741,7 +746,6 @@ func _handle_right_click(world_pos: Vector2) -> void:
 				nearest = {"tile": dest_tile, "slot": si}
 
 	# If clicking right on a tree inside the clicked tile and close, assign chopping; otherwise prefer move
-	# Make this a bit more forgiving and also allow when the tile has exactly one live tree.
 	var chop_radius := TILE_SIZE * 0.6
 	var has_target := nearest.has("tile") and nearest.has("slot")
 	var want_chop := has_target and (nd < chop_radius or live_count == 1)
@@ -754,31 +758,25 @@ func _handle_right_click(world_pos: Vector2) -> void:
 		if sel.size() > 1:
 			queue_list = _find_neighbor_trees(tilev, 4)
 		for u in sel:
-			# Defer heavy chop start to farmer physics via state intent
-			var used_tile := tilev
-			var used_slot := first_slot
 			if u and u.has_method("want_chop_lumberjack"):
 				u.want_chop_lumberjack(tilev, first_slot, queue_list)
 				assigned_any += 1
 				# visual marker at requested target
-				var pos = _world_pos_for_slot(used_tile, used_slot)
+				var pos = _world_pos_for_slot(tilev, first_slot)
 				order_markers.append({"pos": pos, "ttl": 0.7})
 		if assigned_any > 0:
-			print("Assigned chopping to %d units near %s" % [assigned_any, str(tilev)])
 			queue_redraw()
 			return
 
 	# Otherwise move: reserve slots on destination tile for up to 5 units
 	var moved := 0
 	for u in sel:
-		# Cancel chopping assignment and disable lumberjack mode on pure move order
 		_cancel_unit_chops(u)
 		if u and u.has_method("set_lumberjack"):
 			u.set_lumberjack(false)
 		var reserved = _reserve_slot_for_unit(dest_tile, u)
 		if reserved == -1:
 			continue
-		# Move to exact fixed slot in the destination tile
 		var target = _world_pos_for_slot(dest_tile, reserved)
 		if u and u.has_method("move_to"):
 			u.move_to(target)
@@ -1309,6 +1307,14 @@ func _reserve_slot_for_unit(tile: Vector2, unit) -> int:
 	return free_idx
 
 func _process(delta: float) -> void:
+	# process at most 1 pending input order per frame to keep input snappy
+	if _pending_orders.size() > 0:
+		var order = _pending_orders.pop_front()
+		if order.has("type") and String(order.type) == "rclick":
+			var sel: Array = order.units if order.has("units") else []
+			var pos: Vector2 = order.pos if order.has("pos") else Vector2.ZERO
+			if sel.size() > 0:
+				_apply_right_click_order(sel, pos)
 	# dynamic chunk streaming heartbeat
 	_stream_accum += delta
 	if _stream_accum >= 0.5:
