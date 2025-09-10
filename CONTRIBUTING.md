@@ -17,6 +17,30 @@ git config --global user.name "Tu Nombre"
 git config --global user.email "tu-email@example.com"
 ```
 
+> Error común al clonar
+>
+> fatal: destination path 'Rise-of-Ages' already exists and is not an empty directory.
+>
+> Soluciones rápidas (elige una):
+> - Ya lo tienes clonado: entra y actualiza
+>   ```powershell
+>   cd Rise-of-Ages
+>   git pull
+>   ```
+> - Clonar con otro nombre de carpeta
+>   ```powershell
+>   git clone https://github.com/edyangel/Rise-of-Ages.git Rise-of-Ages-2
+>   ```
+> - Si la carpeta existe pero no es repo (o está vacía), borra/mueve la carpeta y vuelve a clonar.
+> - Avanzado: convertir carpeta existente en repo remoto
+>   ```powershell
+>   cd Rise-of-Ages
+>   git init
+>   git remote add origin https://github.com/edyangel/Rise-of-Ages.git
+>   git fetch
+>   git switch -c main --track origin/main
+>   ```
+
 ## Abrir Godot
 - Si el ejecutable está en la raíz del repo:
   ```powershell
