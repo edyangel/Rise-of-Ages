@@ -51,6 +51,16 @@ git config --global user.email "tu-email@example.com"
   godot --editor --path .
   ```
 
+> ¿Error: "No se encontró el ejecutable Godot_v4.4.1-stable_win64.exe"?
+>
+> El repo no incluye Godot. Opciones:
+> - Usa Godot desde PATH (recomendado): instala Godot 4.4.1 (Standard, no .NET salvo que lo necesites), agrega godot.exe al PATH y prueba `godot --version`. Luego:
+>   ```powershell
+>   godot --editor --path .
+>   ```
+> - Descarga el ejecutable portátil de Godot 4.4.1 para Windows y colócalo en la raíz del repo con el nombre `Godot_v4.4.1-stable_win64.exe` (o actualiza el comando con el nombre real del archivo) y ejecútalo como arriba.
+> - Alternativa: abre el lanzador de Godot, haz "Import/Scan" y selecciona el archivo `project.godot` de este repo.
+
 ## Ciclo de trabajo diario
 1. Traer lo último de main
    ```powershell
