@@ -41,6 +41,9 @@ var _lumberjack_mode: bool = false
 const _SCAN_PERIOD := 0.8
 var _scan_cooldown := 0.0
 
+# Intent queue processed in physics to avoid heavy work on input thread
+var _intent: Dictionary = {}
+
 const FRAME_W := 16
 const FRAME_H := 16
 const SHEET_COLS := 5
@@ -66,6 +69,30 @@ func _ready() -> void:
 		anim.texture_repeat = CanvasItem.TEXTURE_REPEAT_DISABLED
 
 func _physics_process(_delta: float) -> void:
+	# Process intents first (e.g., lumberjack chop request)
+	if _intent.has("type"):
+		var t = String(_intent.get("type", ""))
+		if t == "lumberjack_chop":
+			var map = get_parent()
+			var tile: Vector2 = _intent.get("tile", Vector2.ZERO)
+			var slot: int = int(_intent.get("slot", -1))
+			var queue: Array = _intent.get("queue", [])
+			if map and ResourceLoader.exists("res://scripts/units/states/farmer_states.gd"):
+				var FS = load("res://scripts/units/states/farmer_states.gd")
+				if FS and FS.has_method("perform_lumberjack"):
+					var started = FS.perform_lumberjack(self, map, tile, slot, queue)
+					if started:
+						_intent.clear()
+					else:
+						# couldn't start; keep intent but throttle to avoid spamming
+						_intent["_retry_in"] = 0.15
+			else:
+				_intent.clear()
+		elif t == "move_to":
+			var target: Vector2 = _intent.get("target", Vector2.ZERO)
+			move_to(target)
+			_intent.clear()
+
 	# tick scan cooldown
 	if _scan_cooldown > 0.0:
 		_scan_cooldown -= _delta
@@ -162,6 +189,9 @@ func command_attack(direction: Vector2) -> void:
 
 func set_lumberjack(on: bool=true) -> void:
 	_lumberjack_mode = on
+
+func want_chop_lumberjack(tile: Vector2, slot: int, queue: Array=[]) -> void:
+	_intent = {"type": "lumberjack_chop", "tile": tile, "slot": slot, "queue": queue}
 
 func is_lumberjack() -> bool:
 	return _lumberjack_mode

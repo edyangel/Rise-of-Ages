@@ -754,31 +754,13 @@ func _handle_right_click(world_pos: Vector2) -> void:
 		if sel.size() > 1:
 			queue_list = _find_neighbor_trees(tilev, 4)
 		for u in sel:
-			var assigned := false
+			# Defer heavy chop start to farmer physics via state intent
 			var used_tile := tilev
 			var used_slot := first_slot
-			# Try primary
-			if start_chop(tilev, first_slot, u):
-				assigned = true
-				cut_queues[u] = queue_list.duplicate()
-				if u and u.has_method("set_lumberjack"):
-					u.set_lumberjack(true)
-			else:
-				# immediate fallback: try from queue
-				var qcopy: Array = queue_list.duplicate()
-				while qcopy.size() > 0 and not assigned:
-					var nxt = qcopy.pop_front()
-					used_tile = nxt.tile
-					used_slot = int(nxt.slot)
-					if start_chop(used_tile, used_slot, u):
-						assigned = true
-						cut_queues[u] = qcopy
-						if u and u.has_method("set_lumberjack"):
-							u.set_lumberjack(true)
-						break
-			if assigned:
+			if u and u.has_method("want_chop_lumberjack"):
+				u.want_chop_lumberjack(tilev, first_slot, queue_list)
 				assigned_any += 1
-				# add transient visual marker at assigned target
+				# visual marker at requested target
 				var pos = _world_pos_for_slot(used_tile, used_slot)
 				order_markers.append({"pos": pos, "ttl": 0.7})
 		if assigned_any > 0:
