@@ -376,45 +376,89 @@ func _attempt_start_chopping_here() -> bool:
 	return false
 
 func _try_lumberjack_scan() -> bool:
-	# Find nearest live tree within LUMBER_RADIUS_TILES and start chopping via map
+	# Find nearest live tree using map’s fast helpers
 	var m = get_parent()
 	if not m:
 		return false
-	# compute current tile
+	# configurable radius
+	var radius = 5
+	if ResourceLoader.exists("res://scripts/config/balance.gd"):
+		var B = load("res://scripts/config/balance.gd")
+		if B and B.has_method("lumber_radius_tiles"):
+			radius = B.lumber_radius_tiles()
+	var nearest = Vector2.ZERO
+	var slot_i := -1
+	# Prefer ring scan centered on our tile
 	var tx = int(floor(global_position.x / m.TILE_SIZE))
 	var ty = int(floor(global_position.y / m.TILE_SIZE))
 	var center = Vector2(tx, ty)
-	var best_tile := Vector2.ZERO
-	var best_slot := -1
 	var best_d := 1e9
-	# iterate map.trees for live entries
-	for t in m.trees:
-		var tt: Vector2 = t["tile"]
-		var dx = abs(int(tt.x) - int(center.x))
-		var dy = abs(int(tt.y) - int(center.y))
-		var cheb = max(dx, dy)
-		var radius = 5
-		# Query configurable radius via Balance config if present
-		if ResourceLoader.exists("res://scripts/config/balance.gd"):
-			var B = load("res://scripts/config/balance.gd")
-			if B and B.has_method("lumber_radius_tiles"):
-				radius = B.lumber_radius_tiles()
-		if cheb > radius:
-			continue
-		if int(t.get("type", 0)) <= 0:
-			continue
-		var slot = int(t.get("slot", -1))
-		if slot < 0:
-			continue
-		var pos = m._world_pos_for_slot(tt, slot)
-		var d = global_position.distance_to(pos)
-		if d < best_d:
-			best_d = d
-			best_tile = tt
-			best_slot = slot
-	if best_slot >= 0:
-		if m.start_chop(best_tile, best_slot, self):
-			return true
+	for dist in range(0, radius + 1):
+		if dist == 0:
+			var k0 = m._get_tile_key(center) if m.has_method("_get_tile_key") else ""
+			if k0 != "" and m.resource_slots.has(k0):
+				for si in range(5):
+					if m.resource_slots[k0][si] == "TREE":
+						var pos0 = m._world_pos_for_slot(center, si)
+						var d0 = global_position.distance_to(pos0)
+						if d0 < best_d:
+							best_d = d0
+							nearest = center
+							slot_i = si
+		else:
+			var cx = int(center.x)
+			var cy = int(center.y)
+			var d = dist
+			for x in range(cx - d, cx + d + 1):
+				var t_top = Vector2(x, cy - d)
+				var kt = m._get_tile_key(t_top)
+				if m.resource_slots.has(kt):
+					for si in range(5):
+						if m.resource_slots[kt][si] == "TREE":
+							var p1 = m._world_pos_for_slot(t_top, si)
+							var dd = global_position.distance_to(p1)
+							if dd < best_d:
+								best_d = dd
+								nearest = t_top
+								slot_i = si
+				var t_bot = Vector2(x, cy + d)
+				var kb = m._get_tile_key(t_bot)
+				if m.resource_slots.has(kb):
+					for sj in range(5):
+						if m.resource_slots[kb][sj] == "TREE":
+							var p2 = m._world_pos_for_slot(t_bot, sj)
+							var dd2 = global_position.distance_to(p2)
+							if dd2 < best_d:
+								best_d = dd2
+								nearest = t_bot
+								slot_i = sj
+			for y in range(cy - d + 1, cy + d):
+				var t_left = Vector2(cx - d, y)
+				var kl = m._get_tile_key(t_left)
+				if m.resource_slots.has(kl):
+					for sk in range(5):
+						if m.resource_slots[kl][sk] == "TREE":
+							var p3 = m._world_pos_for_slot(t_left, sk)
+							var dd3 = global_position.distance_to(p3)
+							if dd3 < best_d:
+								best_d = dd3
+								nearest = t_left
+								slot_i = sk
+				var t_right = Vector2(cx + d, y)
+				var kr = m._get_tile_key(t_right)
+				if m.resource_slots.has(kr):
+					for sl in range(5):
+						if m.resource_slots[kr][sl] == "TREE":
+							var p4 = m._world_pos_for_slot(t_right, sl)
+							var dd4 = global_position.distance_to(p4)
+							if dd4 < best_d:
+								best_d = dd4
+								nearest = t_right
+								slot_i = sl
+		if slot_i >= 0:
+			break
+	if slot_i >= 0:
+		return m.start_chop(nearest, slot_i, self)
 	return false
 
 func _draw() -> void:

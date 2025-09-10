@@ -753,10 +753,11 @@ func _apply_right_click_order(sel: Array, world_pos: Vector2) -> void:
 		var tilev: Vector2 = nearest["tile"]
 		var first_slot: int = int(nearest["slot"])
 		var assigned_any := 0
-		# Build smart queue only when multi-select; use a smaller radius to keep it snappy.
+		# Build smart queue only when multi-select; cap to reduce work
 		var queue_list: Array = []
 		if sel.size() > 1:
-			queue_list = _find_neighbor_trees(tilev, 4)
+			# at most 12 neighbors is plenty for typical group sizes
+			queue_list = _find_neighbor_trees(tilev, 4, 12)
 		for u in sel:
 			if u and u.has_method("want_chop_lumberjack"):
 				u.want_chop_lumberjack(tilev, first_slot, queue_list)
@@ -784,7 +785,7 @@ func _apply_right_click_order(sel: Array, world_pos: Vector2) -> void:
 	if moved == 0:
 		print("Tile %s is full; no units moved" % str(dest_tile))
 
-func _find_neighbor_trees(center_tile: Vector2, radius_tiles: int) -> Array:
+func _find_neighbor_trees(center_tile: Vector2, radius_tiles: int, max_count: int = 0) -> Array:
 	# Fast neighbor scan: iterate tiles in Chebyshev rings around center and read resource_slots
 	var result: Array = []
 	# Ensure slot map exists for tiles we touch lazily
@@ -795,6 +796,8 @@ func _find_neighbor_trees(center_tile: Vector2, radius_tiles: int) -> Array:
 				for si in range(5):
 					if resource_slots[k0][si] == "TREE":
 						result.append({"tile": center_tile, "slot": si})
+						if max_count > 0 and result.size() >= max_count:
+							return result
 		else:
 			var cx = int(center_tile.x)
 			var cy = int(center_tile.y)
@@ -807,12 +810,16 @@ func _find_neighbor_trees(center_tile: Vector2, radius_tiles: int) -> Array:
 					for si in range(5):
 						if resource_slots[k_top][si] == "TREE":
 							result.append({"tile": t_top, "slot": si})
+							if max_count > 0 and result.size() >= max_count:
+								return result
 				var t_bot = Vector2(x, cy + d)
 				var k_bot = _get_tile_key(t_bot)
 				if resource_slots.has(k_bot):
 					for si2 in range(5):
 						if resource_slots[k_bot][si2] == "TREE":
 							result.append({"tile": t_bot, "slot": si2})
+							if max_count > 0 and result.size() >= max_count:
+								return result
 			# Left and right columns (excluding corners already added)
 			for y in range(cy - d + 1, cy + d):
 				var t_left = Vector2(cx - d, y)
@@ -821,12 +828,16 @@ func _find_neighbor_trees(center_tile: Vector2, radius_tiles: int) -> Array:
 					for sj in range(5):
 						if resource_slots[k_left][sj] == "TREE":
 							result.append({"tile": t_left, "slot": sj})
+							if max_count > 0 and result.size() >= max_count:
+								return result
 				var t_right = Vector2(cx + d, y)
 				var k_right = _get_tile_key(t_right)
 				if resource_slots.has(k_right):
 					for sk in range(5):
 						if resource_slots[k_right][sk] == "TREE":
 							result.append({"tile": t_right, "slot": sk})
+							if max_count > 0 and result.size() >= max_count:
+								return result
 	# The first item(s) may be the center tile; drop the first if it's exactly the center (primary is already chosen)
 	if result.size() > 0 and result[0].tile == center_tile:
 		result.remove_at(0)
