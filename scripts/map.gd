@@ -53,6 +53,7 @@ const TREE_COLS = 4
 const SHOW_GRID := false
 const USE_PROCEDURAL_BIOMES := true
 var WORLD_SEED: int = 12345
+const VERBOSE_LOG := false
 
 # Chunk streaming state
 var _terrain: Node = null
@@ -783,7 +784,8 @@ func _apply_right_click_order(sel: Array, world_pos: Vector2) -> void:
 			u.move_to(target)
 			moved += 1
 	if moved == 0:
-		print("Tile %s is full; no units moved" % str(dest_tile))
+		if VERBOSE_LOG:
+			print("Tile %s is full; no units moved" % str(dest_tile))
 
 func _find_neighbor_trees(center_tile: Vector2, radius_tiles: int, max_count: int = 0) -> Array:
 	# Fast neighbor scan: iterate tiles in Chebyshev rings around center and read resource_slots
@@ -1066,7 +1068,8 @@ func _draw():
 		var k = _get_tile_key(tile)
 		# debug: report if a live tree is drawn but resource slot already marked TRUNK
 		if resource_slots.has(k) and resource_slots[k][slot] == "TRUNK":
-			print("DRAW CONFLICT: live tree present at %s slot %d type=%d but slot marked TRUNK" % [str(tile), slot, int(t.get("type",1))])
+			if VERBOSE_LOG:
+				print("DRAW CONFLICT: live tree present at %s slot %d type=%d but slot marked TRUNK" % [str(tile), slot, int(t.get("type",1))])
 		# if this tree has a node (Sprite2D) we've already created, skip immediate draw of sprite (but still show HP bar)
 		var has_tree_node: bool = t.has("node") and t["node"] != null
 		# if felled we draw a spawned trunk Sprite2D instead (created on chop finish)
@@ -1157,7 +1160,8 @@ func _spawn_demo_constructors():
 			inst.position = (p * TILE_SIZE) + Vector2(TILE_SIZE / 2.0, TILE_SIZE / 2.0)
 		else:
 			inst.position = _world_pos_for_slot(tile, reserved)
-		print("Spawned constructor at %s" % str(inst.position))
+		if VERBOSE_LOG:
+			print("Spawned constructor at %s" % str(inst.position))
 
 func _spawn_demo_soldados():
 	var scene = load("res://scenes/units/farmer.tscn")
@@ -1173,7 +1177,8 @@ func _spawn_demo_soldados():
 			inst.position = (p * TILE_SIZE) + Vector2(TILE_SIZE / 2.0, TILE_SIZE / 2.0)
 		else:
 			inst.position = _world_pos_for_slot(p, reserved)
-		print("Spawned farmer at %s" % str(inst.position))
+		if VERBOSE_LOG:
+			print("Spawned farmer at %s" % str(inst.position))
 
 
 func _get_tile_key(tile: Vector2) -> String:
@@ -1555,7 +1560,8 @@ func chop_tree_at(tile: Vector2, slot_idx: int) -> bool:
 		game.add_wood(base_yield_wood)
 	if extra_food > 0 and game and game.has_method("add_food"):
 		game.add_food(extra_food)
-	print("chop_tree_at: tile=%s slot=%d felled %d entries sheet=%s" % [str(tile), slot_idx, matches.size(), sheet])
+	if VERBOSE_LOG:
+		print("chop_tree_at: tile=%s slot=%d felled %d entries sheet=%s" % [str(tile), slot_idx, matches.size(), sheet])
 
 	# stop any choppers stuck on this tile/slot
 	_stop_choppers_on(tile, slot_idx)
@@ -1625,7 +1631,8 @@ func chop_tree_at(tile: Vector2, slot_idx: int) -> bool:
 				tt["node"] = null
 			trees.remove_at(i)
 			removed_overlap += 1
-	print("chop_tree_at: removed matched=%d overlap=%d entries" % [removed_matched, removed_overlap])
+	if VERBOSE_LOG:
+		print("chop_tree_at: removed matched=%d overlap=%d entries" % [removed_matched, removed_overlap])
 
 	return true
 

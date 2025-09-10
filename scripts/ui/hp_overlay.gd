@@ -1,14 +1,20 @@
 extends Node2D
 
 var map_ref: Node2D = null
+var _poll_accum := 0.0
+const POLL_PERIOD := 0.1
 
 func _ready():
 	# try to discover the map node (assume parent)
 	map_ref = get_parent()
 	set_process(true)
 
-func _process(_delta: float) -> void:
-	# Redraw only when there are active bars to show
+func _process(delta: float) -> void:
+	_poll_accum += delta
+	if _poll_accum < POLL_PERIOD:
+		return
+	_poll_accum = 0.0
+	# Redraw only when there are active bars to show (10Hz)
 	if map_ref and map_ref.trees.size() > 0:
 		var now_overlay = Time.get_unix_time_from_system()
 		for t in map_ref.trees:
