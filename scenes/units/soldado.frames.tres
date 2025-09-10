@@ -1,0 +1,15 @@
+[gd_resource type="SpriteFrames" load_steps=2 format=2]
+
+[ext_resource path="res://scripts/units/soldado.gd" type="Script" id=1]
+
+[resource]
+animations = {
+	"idle_down": ["res://scenes/units/soldado 1/IDLE/idle_down.png"],
+	"idle_up": ["res://scenes/units/soldado 1/IDLE/idle_up.png"],
+	"idle_left": ["res://scenes/units/soldado 1/IDLE/idle_left.png"],
+	"idle_right": ["res://scenes/units/soldado 1/IDLE/idle_right.png"],
+	"run_down": ["res://scenes/units/soldado 1/RUN/run_down.png"],
+	"run_up": ["res://scenes/units/soldado 1/RUN/run_up.png"],
+	"run_left": ["res://scenes/units/soldado 1/RUN/run_left.png"],
+	"run_right": ["res://scenes/units/soldado 1/RUN/run_right.png"]
+}

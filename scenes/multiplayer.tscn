@@ -1,0 +1,7 @@
+[gd_scene load_steps=1 format=3]
+
+[node name="Multiplayer" type="Control"]
+
+[node name="Label" type="Label" parent="."]
+text = "Multijugador (placeholder)"
+align = 1
