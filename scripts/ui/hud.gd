@@ -15,6 +15,10 @@ var food := 0
 
 const ICONS_PATH := "res://MiniWorldSprites/User Interface/Icons-Essentials.png" # 64x64, 4x4 grid of 16x16
 
+# Preload textures to avoid runtime load failures and ensure availability
+const _TREES_TEX: Texture2D = preload("res://MiniWorldSprites/Nature/Trees.png")
+const _ICONS_TEX: Texture2D = preload("res://MiniWorldSprites/User Interface/Icons-Essentials.png")
+
 # cached icon sheet data
 var _icons_tex: Texture2D = null
 var _grid_cols := 4
@@ -30,13 +34,17 @@ func _ready():
 	call_deferred("_refresh_all")
 
 func _setup_icons():
+	# Robustly find the box even if layout changed
+	if box == null:
+		box = get_node_or_null("Resources")
 	if box == null:
 		return
+
 	# Wood icon from Trees.png trunk frame (frame 0)
 	var TreeDataRef = preload("res://scripts/tree_data.gd")
 	var wood_icon: TextureRect = box.get_node_or_null("WoodIcon")
 	if wood_icon:
-		var tex: Texture2D = load(TreeDataRef.ATLAS) if ResourceLoader.exists(TreeDataRef.ATLAS) else null
+		var tex: Texture2D = _TREES_TEX
 		if tex:
 			var fw = int(tex.get_size().x / TreeDataRef.FRAME_COLS)
 			var fh = int(tex.get_size().y)
@@ -46,14 +54,20 @@ func _setup_icons():
 			wood_icon.texture = at
 			wood_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 			wood_icon.custom_minimum_size = Vector2(20, 20)
+			wood_icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		elif _ICONS_TEX:
+			# Fallback to icon sheet (choose some frame as placeholder)
+			_icons_tex = _ICONS_TEX
+			_cell_w = int(_icons_tex.get_size().x / _grid_cols)
+			_cell_h = int(_icons_tex.get_size().y / _grid_rows)
+			_set_icon("WoodIcon", 5) # arbitrary fallback frame
 
 	# Other icons from icons-essentials.png frames: 1,2,3,4,8,9
 	# Mapping: gold=1, iron=2, copper=3, stone=4, water=8, food=9
-	if ResourceLoader.exists(ICONS_PATH):
-		_icons_tex = load(ICONS_PATH)
-		if _icons_tex:
-			_cell_w = int(_icons_tex.get_size().x / _grid_cols)
-			_cell_h = int(_icons_tex.get_size().y / _grid_rows)
+	_icons_tex = _ICONS_TEX
+	if _icons_tex:
+		_cell_w = int(_icons_tex.get_size().x / _grid_cols)
+		_cell_h = int(_icons_tex.get_size().y / _grid_rows)
 
 	_set_icon("GoldIcon", 1)
 	_set_icon("IronIcon", 2)
@@ -80,6 +94,7 @@ func _set_icon(node_name: String, frame_idx_1based: int) -> void:
 	node.texture = at2
 	node.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	node.custom_minimum_size = Vector2(20, 20)
+	node.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 
 func _refresh_all():
 	_set_label_text("WoodValue", wood)
