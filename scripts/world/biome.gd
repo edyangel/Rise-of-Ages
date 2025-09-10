@@ -259,6 +259,14 @@ func create_biome_chunk_tilemap(map_node: Node, chunk_pos: Vector2, tiles_x: int
                         var col1 = idx1 % FRAME_COLS
                         var row1 = int(idx1 / float(FRAME_COLS))
                         tm.set_cell(0, cell, src_ids["grass"], Vector2i(col1, row1), 0)
+                        # Chickens prefer open grass: when not in clustered trees and moderate humidity
+                        if map_node and map_node.has_method("spawn_chicken_group_once"):
+                            var open_grass := (not is_edge) and (u < 0.55)
+                            # Use cluster noise as proxy for tree density
+                            var cluster_v = _n01(_noise_cluster.get_noise_2d(cell.x, cell.y))
+                            if open_grass and cluster_v < 0.5:
+                                if rng.randf() < 0.0015: # rare per tile
+                                    map_node.spawn_chicken_group_once(Vector2(cell.x, cell.y), 3, 8)
                 BIOME_TAIGA:
                     if src_ids.has("winter"):
                         tm.set_cell(0, cell, src_ids["winter"], Vector2i(5, 0), 0) # gray base
@@ -272,6 +280,11 @@ func create_biome_chunk_tilemap(map_node: Node, chunk_pos: Vector2, tiles_x: int
                         var col2 = idx2 % FRAME_COLS
                         var row2 = int(idx2 / float(FRAME_COLS))
                         tm.set_cell(0, cell, src_ids["dead"], Vector2i(col2, row2), 0)
+                        # Very rare chickens wandering in sparse tundra clearings
+                        if map_node and map_node.has_method("spawn_chicken_group_once"):
+                            var cluster_v2 = _n01(_noise_cluster.get_noise_2d(cell.x, cell.y))
+                            if cluster_v2 < 0.45 and rng.randf() < 0.001:
+                                map_node.spawn_chicken_group_once(Vector2(cell.x, cell.y), 3, 6)
                 BIOME_SNOW_MOUNTAIN:
                     if src_ids.has("winter"):
                         tm.set_cell(0, cell, src_ids["winter"], Vector2i(4, 0), 0) # snow base
@@ -342,6 +355,9 @@ func create_biome_chunk_tilemap(map_node: Node, chunk_pos: Vector2, tiles_x: int
                             slot = map_node.get_free_resource_slot(tile)
                         if slot != -1:
                             map_node.spawn_tree_entry("coconut", palm, tile, slot)
+                    # Chickens also roam beaches occasionally (few trees)
+                    if map_node and map_node.has_method("spawn_chicken_group_once") and rng.randf() < 0.001:
+                        map_node.spawn_chicken_group_once(Vector2(cell.x, cell.y), 3, 6)
 
                 elif b == BIOME_DESERT:
                     if map_node.has_method("spawn_tree_entry"):

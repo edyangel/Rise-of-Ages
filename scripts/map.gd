@@ -28,6 +28,8 @@ var trees_by_slot := {} # key "x,y:slot" -> tree entry dictionary (live trees on
 var golds: Array = []
 var rocks: Array = []
 var tumbleweeds: Array = []
+var animals: Array = [] # spawned wildlife (e.g., chickens)
+var wildlife_spawns := {} # key "type:x,y" -> true to avoid double-spawning on chunk reloads
 var tree_atlas: Texture2D = null
 var cactus_atlas: Texture2D = null
 var coconut_atlas: Texture2D = null
@@ -1726,3 +1728,36 @@ func register_tumbleweed(node: Node2D, atlas: AtlasTexture, fw: int, fh: int, fr
 
 func register_rock_node(node: Node2D) -> void:
 	rocks.append(node)
+
+# --- Animals API ---
+func spawn_chicken_at_world(pos: Vector2) -> Node2D:
+	var scene_path = "res://scenes/animals/chicken.tscn"
+	if not ResourceLoader.exists(scene_path):
+		return null
+	var Chicken = load(scene_path)
+	if Chicken == null:
+		return null
+	var inst = Chicken.instantiate()
+	if inst and inst is Node2D:
+		inst.position = pos
+		add_child(inst)
+		animals.append(inst)
+		return inst
+	return null
+
+func spawn_chicken_group(center_tile: Vector2, count_min: int=3, count_max: int=8) -> void:
+	var rng = RandomNumberGenerator.new()
+	rng.randomize()
+	var n = rng.randi_range(count_min, max(count_min, count_max))
+	for i in range(n):
+		var jitter = Vector2(rng.randf_range(-0.8, 0.8), rng.randf_range(-0.8, 0.8))
+		var t = center_tile + jitter
+		var pos = Vector2((t.x + 0.5) * TILE_SIZE, (t.y + 0.5) * TILE_SIZE)
+		spawn_chicken_at_world(pos)
+
+func spawn_chicken_group_once(center_tile: Vector2, count_min: int=3, count_max: int=8) -> void:
+	var k = "chicken:%d,%d" % [int(center_tile.x), int(center_tile.y)]
+	if wildlife_spawns.has(k):
+		return
+	wildlife_spawns[k] = true
+	spawn_chicken_group(center_tile, count_min, count_max)

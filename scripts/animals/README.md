@@ -1,0 +1,1 @@
+Animal scripts live here. Chicken is the first: simple wandering AI.
