@@ -1,5 +1,7 @@
 extends Node2D
 
+signal selection_changed(count: int)
+
 # Grid map: each tile is TILE_SIZE x TILE_SIZE
 # NOTE: tiles can be treated as chunks; objects/structures occupy parts of tiles or multiple tiles
 const TILE_SIZE = 48
@@ -672,6 +674,10 @@ func _input(event):
 				return
 		else:
 			# touch released
+			# If this was a simple tap (no drag-select in progress), treat as action/select
+			if _drag_touch_id == -1 and not drag_select_active:
+				var wp = _screen_to_world(event.position)
+				mobile_tap_action(wp)
 			_last_touch_release_time = Time.get_unix_time_from_system()
 			if _drag_touch_id == event.index:
 				if drag_select_active:
@@ -691,6 +697,29 @@ func _input(event):
 				if _sel_overlay and _sel_overlay.has_method("set_rect"):
 					_sel_overlay.call("set_rect", drag_select_start, drag_select_current)
 			return
+
+func _screen_to_world(p: Vector2) -> Vector2:
+	var cam := get_viewport().get_camera_2d()
+	if cam == null:
+		return p
+	var vp := get_viewport_rect().size
+	var z := cam.zoom
+	return cam.get_screen_center_position() + Vector2((p.x - vp.x * 0.5) * z.x, (p.y - vp.y * 0.5) * z.y)
+
+func is_dragging_selection() -> bool:
+	return drag_select_active or _drag_touch_id != -1
+
+func clear_selection_public() -> void:
+	_clear_selection()
+	if _sel_overlay and _sel_overlay.has_method("clear"):
+		_sel_overlay.call("clear")
+	queue_redraw()
+
+func mobile_tap_action(world_pos: Vector2) -> void:
+	if selected_units.size() > 0 or selected_unit != null:
+		_handle_right_click(world_pos)
+	else:
+		_handle_left_click(world_pos)
 
 
 func _handle_left_click(world_pos: Vector2) -> void:
@@ -713,6 +742,7 @@ func _handle_left_click(world_pos: Vector2) -> void:
 		selected_units = [found]
 		if found.has_method("set_selected"):
 			found.set_selected(true)
+		selection_changed.emit(1)
 		return
 	# empty click: clear all
 	_clear_selection()
@@ -1137,6 +1167,7 @@ func _finish_drag_select() -> void:
 	# reset state and redraw
 	drag_select_active = false
 	queue_redraw()
+	selection_changed.emit(selected_units.size())
 
 func _clear_selection() -> void:
 	if selected_unit and (not selected_units.has(selected_unit)):
@@ -1147,6 +1178,7 @@ func _clear_selection() -> void:
 			u.set_selected(false)
 	selected_units.clear()
 	selected_unit = null
+	selection_changed.emit(0)
 
 func _spawn_demo_constructors():
 	var scene = load("res://scenes/units/constructor.tscn")

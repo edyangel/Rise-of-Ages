@@ -44,6 +44,36 @@ func _ready():
 		if hud.has_method("set_water"): hud.set_water(water)
 		if hud.has_method("set_food"): hud.set_food(food)
 
+	# Create a bottom-left 'Deselect' button on CanvasLayer if not present (for mobile)
+	if has_node("CanvasLayer"):
+		var cl = $CanvasLayer
+		if not cl.has_node("DeselectButton"):
+			var btn := Button.new()
+			btn.name = "DeselectButton"
+			btn.text = "X"
+			btn.focus_mode = Control.FOCUS_NONE
+			btn.custom_minimum_size = Vector2(48, 48)
+			btn.theme_type_variation = "FlatButton"
+			cl.add_child(btn)
+			# Anchor bottom-left
+			btn.anchor_left = 0
+			btn.anchor_top = 1
+			btn.anchor_right = 0
+			btn.anchor_bottom = 1
+			btn.offset_left = 8
+			btn.offset_bottom = -8
+			btn.offset_top = -56
+			btn.offset_right = 56
+			btn.z_index = 2000
+			btn.visible = false
+			btn.connect("pressed", Callable(self, "_on_deselect_pressed"))
+
+	# Listen to selection_changed from Map to toggle Deselect button
+	if has_node("Map"):
+		var map = $Map
+		if map.has_signal("selection_changed"):
+			map.connect("selection_changed", Callable(self, "_on_map_selection_changed"))
+
 
 func _process(delta):
 	if not has_node("Camera2D"):
@@ -64,7 +94,6 @@ func _process(delta):
 		move.y += speed
 	if move != Vector2.ZERO:
 		cam.position += move
-
 
 func _unhandled_input(event):
 	# refit camera on F key
@@ -113,6 +142,32 @@ func _unhandled_input(event):
 		# event.factor > 1: zoom in; < 1: zoom out
 		z = clamp(z / max(0.01, event.factor), 0.05, 10.0)
 		camera.zoom = Vector2(z, z)
+
+	# One-finger pan on mobile when not drag-selecting
+	if event is InputEventScreenDrag and has_node("Camera2D"):
+		var map = has_node("Map") ? $Map : null
+		if map and map.has_method("is_dragging_selection") and map.is_dragging_selection():
+			return
+		var cam = $Camera2D
+		# event.relative is in screen pixels; translate using zoom
+		var z = cam.zoom
+		cam.position -= Vector2(event.relative.x * z.x, event.relative.y * z.y)
+
+	# Single tap: forward to map tap action if present (some devices send ScreenTouch without our map handler catching it)
+	if event is InputEventScreenTouch and not event.pressed:
+		var map = has_node("Map") ? $Map : null
+		if map and map.has_method("mobile_tap_action"):
+			# convert screen to world like map does
+			var vp = get_viewport_rect().size
+			var cam = has_node("Camera2D") ? $Camera2D : null
+			var wp = event.position
+			if cam:
+				var z = cam.zoom
+				wp = cam.get_screen_center_position() + Vector2((event.position.x - vp.x * 0.5) * z.x, (event.position.y - vp.y * 0.5) * z.y)
+			map.mobile_tap_action(wp)
+
+
+ 
 
 
 # Visuals are drawn by the Map scene
@@ -174,3 +229,12 @@ func add_food(amount: int):
 	var hud = _hud()
 	if hud and hud.has_method("set_food"):
 		hud.set_food(food)
+
+# Toggle deselect button based on selection size
+func _on_map_selection_changed(count: int) -> void:
+	if has_node("CanvasLayer/DeselectButton"):
+		$CanvasLayer/DeselectButton.visible = count > 0
+
+func _on_deselect_pressed() -> void:
+	if has_node("Map") and $Map.has_method("clear_selection_public"):
+		$Map.clear_selection_public()
